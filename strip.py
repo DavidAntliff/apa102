@@ -22,7 +22,11 @@ class Strip(object):
         self._leds = all_off(self._num_LEDs)
         self._spi = spidev.SpiDev()
         self._spi.open(bus, device)
+        logger.debug("LED Strip of {0} LEDS on SPI bus {1}, device {2}".format(num_LEDs, bus, device))
 
+    def __len__(self):
+        return len(self._leds)
+        
     def set_led(self, pos, red, green, blue, brightness=MAX_BRIGHTNESS):
         try:
             self._leds[pos].set(red, green, blue, brightness)

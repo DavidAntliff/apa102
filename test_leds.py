@@ -7,7 +7,6 @@ import time
 import signal
 
 import logging
-
 logger = logging.getLogger(__name__)
 
 def init_logging(log_level):
