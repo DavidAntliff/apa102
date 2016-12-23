@@ -4,6 +4,7 @@ import argparse
 import time
 import random
 import operator
+from collections import namedtuple
 import logging
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,8 @@ def signal_handler(signal, frame):
     _exiting = True
 
 from strip import Strip
-    
+from led import MAX_RGB
+
 DEFAULT_NUM_LEDS = 60
 DEFAULT_SPI_BUS = 0
 DEFAULT_SPI_DEVICE = 0
@@ -53,6 +55,12 @@ def main():
     comet_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     comet_parser.set_defaults(subparser="comet", brightness=31)
 
+    chaser_parser = subparsers.add_parser("chaser", help="Chaser")
+    chaser_parser.add_argument("-n", "--number", dest="number", type=int, help="Number of chasers", default=3)
+    chaser_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=100)
+    chaser_parser.add_argument("-p", "--proximity", dest="proximity", type=int, help="Maximum distance between chasers", default=10)
+    chaser_parser.set_defaults(subparser="chaser")
+    
     args = parser.parse_args()
 
     init_logging(logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING))
@@ -65,6 +73,8 @@ def main():
         demo_rgb_fader(strip, args.rate, args.steps, args.brightness)
     elif args.subparser == "comet":
         demo_comet(strip, args.speed, args.length, args.cycle, args.reverse, args.brightness)
+    elif args.subparser == "chaser":
+        demo_chaser(strip, args.number, args.speed, args.proximity, args.brightness)
 
     strip.set_all_off()
     strip.update()
@@ -135,8 +145,14 @@ def demo_comet(strip, speed, length, cycle, reverse, brightness):
 
     while not _exiting:
         for i in range(length):
-            strip.set_led(pos - i, 255 - i * r_mod, 255 - i * g_mod, 255 - i * b_mod, brightness - i * bright_mod)
-        strip.set_led(pos - length, 0, 0, 0, 0)
+            try:
+               strip.set_led(pos - i, 255 - i * r_mod, 255 - i * g_mod, 255 - i * b_mod, brightness - i * bright_mod)
+            except IndexError:
+               pass
+        try:
+            strip.set_led(pos - length, 0, 0, 0, 0)
+        except IndexError:
+            pass
         strip.update()
         pos = (pos + 1) % (len(strip) + 2 * length)
         if cycle and pos == 0:
@@ -145,6 +161,33 @@ def demo_comet(strip, speed, length, cycle, reverse, brightness):
             g_mod = b_mod
             b_mod = x_mod
         time.sleep(delay_time)
-        
+
+
+def demo_chaser(strip, number, speed, proximity, brightness):
+
+    pos = 0
+    delay_time = 1.0 / speed
+
+    Chaser = namedtuple("Chaser", ("red", "green", "blue", "offset"))
+
+    chasers = [Chaser(random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), -i * proximity) for i in range(number)]
+      
+    while not _exiting:
+        for chaser in chasers:
+            try:
+                strip.set_off(chaser.offset + pos)
+            except IndexError:
+                pass
+        pos = (pos + 1) % (len(strip) + number * proximity)
+        logger.debug(pos)
+        for chaser in chasers:
+            try:
+                strip.set_led(chaser.offset + pos, chaser.red, chaser.green, chaser.blue, brightness)
+            except IndexError:
+                pass
+        strip.update()
+        time.sleep(delay_time)
+
+
 if __name__ == "__main__":
    main()
