@@ -49,6 +49,8 @@ def main():
     comet_parser = subparsers.add_parser("comet", help="Comet")
     comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=100)
     comet_parser.add_argument("-l", "--length", dest="length", type=int, help="Length of tail", default=20)
+    comet_parser.add_argument("-c", "--cycle", dest="cycle", action="store_true", help="Cycle comet colour")
+    comet_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     comet_parser.set_defaults(subparser="comet", brightness=31)
 
     args = parser.parse_args()
@@ -62,7 +64,7 @@ def main():
     elif args.subparser == "rgb_fader":
         demo_rgb_fader(strip, args.rate, args.steps, args.brightness)
     elif args.subparser == "comet":
-        demo_comet(strip, args.speed, args.length, args.brightness)
+        demo_comet(strip, args.speed, args.length, args.cycle, args.reverse, args.brightness)
 
     strip.set_all_off()
     strip.update()
@@ -119,8 +121,10 @@ def demo_rgb_fader(strip, rate, steps, brightness):
         strip.update()
         time.sleep(delay_time)
 
-def demo_comet(strip, speed, length, brightness):
+def demo_comet(strip, speed, length, cycle, reverse, brightness):
 
+    if reverse:
+        strip.reverse()
     pos = 0
     delay_time = 1. / speed
 
@@ -134,7 +138,12 @@ def demo_comet(strip, speed, length, brightness):
             strip.set_led(pos - i, 255 - i * r_mod, 255 - i * g_mod, 255 - i * b_mod, brightness - i * bright_mod)
         strip.set_led(pos - length, 0, 0, 0, 0)
         strip.update()
-        pos = (pos + 1) % len(strip)
+        pos = (pos + 1) % (len(strip) + 2 * length)
+        if cycle and pos == 0:
+            x_mod = r_mod
+            r_mod = g_mod
+            g_mod = b_mod
+            b_mod = x_mod
         time.sleep(delay_time)
         
 if __name__ == "__main__":

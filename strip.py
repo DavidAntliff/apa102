@@ -19,6 +19,7 @@ def render(spi, states):
 class Strip(object):
     def __init__(self, num_LEDs, bus, device):
         self._num_LEDs = num_LEDs
+        self._reverse = False
         self._leds = all_off(self._num_LEDs)
         self._spi = spidev.SpiDev()
         self._spi.open(bus, device)
@@ -28,10 +29,11 @@ class Strip(object):
         return len(self._leds)
         
     def set_led(self, pos, red, green, blue, brightness=MAX_BRIGHTNESS):
+        pos = max(0, pos)  # never go negative
         try:
             self._leds[pos].set(red, green, blue, brightness)
         except IndexError:
-            logger.error("LED pos {0} out of range".format(pos))
+            logger.warning("LED pos {0} out of range".format(pos))
 
     def set_all(self, red, green, blue, brightness=MAX_BRIGHTNESS):
         for led in self._leds:
@@ -42,4 +44,10 @@ class Strip(object):
             led.set(0, 0, 0, 0)
 
     def update(self):
-        render(self._spi, self._leds)
+        leds = list(reversed(self._leds)) if self._reverse else self._leds
+        render(self._spi, leds)
+
+    def reverse(self):
+        """Reverse mapping of LEDs on strip."""
+        self._reverse = not self._reverse
+        logger.info("Strip mapping is now {0}".format("normal" if not self._reverse else "reversed"))
