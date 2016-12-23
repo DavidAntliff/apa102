@@ -56,9 +56,12 @@ def main():
     comet_parser.set_defaults(subparser="comet", brightness=31)
 
     chaser_parser = subparsers.add_parser("chaser", help="Chaser")
-    chaser_parser.add_argument("-n", "--number", dest="number", type=int, help="Number of chasers", default=3)
+    chaser_parser.add_argument("-n", "--number", dest="number", type=int, help="Number of chasers", default=10)
     chaser_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=100)
-    chaser_parser.add_argument("-p", "--proximity", dest="proximity", type=int, help="Maximum distance between chasers", default=10)
+    chaser_parser.add_argument("-p", "--proximity", dest="proximity", type=int, help="Maximum distance between chasers", default=15)
+    chaser_parser.add_argument("-l", "--length", dest="length", type=int, help="Length of chaser", default=10)
+    chaser_parser.add_argument("-e", "--decrease", dest="decrease", action="store_true", help="Decrease length of chasers")
+    chaser_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     chaser_parser.set_defaults(subparser="chaser")
     
     args = parser.parse_args()
@@ -74,7 +77,7 @@ def main():
     elif args.subparser == "comet":
         demo_comet(strip, args.speed, args.length, args.cycle, args.reverse, args.brightness)
     elif args.subparser == "chaser":
-        demo_chaser(strip, args.number, args.speed, args.proximity, args.brightness)
+        demo_chaser(strip, args.number, args.speed, args.proximity, args.length, args.decrease, args.reverse, args.brightness)
 
     strip.set_all_off()
     strip.update()
@@ -163,28 +166,41 @@ def demo_comet(strip, speed, length, cycle, reverse, brightness):
         time.sleep(delay_time)
 
 
-def demo_chaser(strip, number, speed, proximity, brightness):
+def demo_chaser(strip, number, speed, proximity, length, decrease, reverse, brightness):
 
     pos = 0
     delay_time = 1.0 / speed
 
-    Chaser = namedtuple("Chaser", ("red", "green", "blue", "offset"))
+    Chaser = namedtuple("Chaser", ("red", "green", "blue", "offset", "length"))
 
-    chasers = [Chaser(random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), -i * proximity) for i in range(number)]
-      
+    def mod_length(x):
+        if decrease:
+            k = length ** (1.0 / (number - 1.0))
+            return int(length / k ** x + 0.5)
+        else:
+            return length
+
+    chasers = [Chaser(random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), -i * proximity, mod_length(i)) for i in range(number)]
+    logger.debug(chasers)
+
+    if reverse:
+        strip.reverse()
+    
     while not _exiting:
         for chaser in chasers:
-            try:
-                strip.set_off(chaser.offset + pos)
-            except IndexError:
-                pass
+            for i in range(chaser.length):
+                try:
+                    strip.set_off(chaser.offset + pos - i)
+                except IndexError:
+                    pass
         pos = (pos + 1) % (len(strip) + number * proximity)
         logger.debug(pos)
         for chaser in chasers:
-            try:
-                strip.set_led(chaser.offset + pos, chaser.red, chaser.green, chaser.blue, brightness)
-            except IndexError:
-                pass
+            for i in range(chaser.length):
+                try:
+                    strip.set_led(chaser.offset + pos - i, chaser.red, chaser.green, chaser.blue, brightness)
+                except IndexError:
+                    pass
         strip.update()
         time.sleep(delay_time)
 

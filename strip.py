@@ -35,7 +35,7 @@ class Strip(object):
         try:
             self._leds[pos].set(red, green, blue, brightness)
         except IndexError:
-            logger.warning("LED pos {0} out of range".format(pos))
+            logger.debug("LED pos {0} out of range".format(pos))
 
     def set_off(self, pos):
         if pos < 0:
@@ -43,7 +43,7 @@ class Strip(object):
         try:
             self._leds[pos].set(0, 0, 0, 0)
         except IndexError:
-            logger.warning("LED pos {0} out of range".format(pos))
+            logger.debug("LED pos {0} out of range".format(pos))
 
     def set_all(self, red, green, blue, brightness=MAX_BRIGHTNESS):
         for led in self._leds:
