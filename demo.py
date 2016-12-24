@@ -21,7 +21,7 @@ def signal_handler(signal, frame):
 from strip import Strip
 from led import MAX_RGB
 
-DEFAULT_NUM_LEDS = 60
+DEFAULT_NUM_LEDS = 120
 DEFAULT_SPI_BUS = 0
 DEFAULT_SPI_DEVICE = 0
 DEFAULT_RATE = 5.0 # Hz
@@ -39,18 +39,19 @@ def main():
     parser.add_argument("-b", "--brightness", dest="brightness", type=int, help="Global brightness (0-31)", default=DEFAULT_BRIGHTNESS)
 
     subparsers = parser.add_subparsers(help="Subcommand help")
-    random_flash_parser = subparsers.add_parser("random_flash", help="Random flash")
+    random_flash_parser = subparsers.add_parser("flash", help="Random flash")
     random_flash_parser.add_argument("-r", "--rate", dest="rate", type=float, help="Animation rate (Hz)", default=5)
-    random_flash_parser.set_defaults(subparser="random_flash")
+    random_flash_parser.set_defaults(subparser="flash")
 
-    rgb_fader_parser = subparsers.add_parser("rgb_fader", help="RGB fader")
+    rgb_fader_parser = subparsers.add_parser("fade", help="RGB fader")
     rgb_fader_parser.add_argument("-r", "--rate", dest="rate", type=float, help="Animation rate (Hz)", default=200)
     rgb_fader_parser.add_argument("-s", "--steps", dest="steps", type=int, help="Steps per target colour", default=100)
-    rgb_fader_parser.set_defaults(subparser="rgb_fader")
+    rgb_fader_parser.set_defaults(subparser="fade")
 
     comet_parser = subparsers.add_parser("comet", help="Comet")
-    comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=100)
+    comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=200)
     comet_parser.add_argument("-l", "--length", dest="length", type=int, help="Length of tail", default=20)
+    comet_parser.add_argument("-x", "--colour", dest="colour", choices=set(("red", "green", "blue")), help="Colour", default="red")
     comet_parser.add_argument("-c", "--cycle", dest="cycle", action="store_true", help="Cycle comet colour")
     comet_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     comet_parser.set_defaults(subparser="comet", brightness=31)
@@ -63,24 +64,49 @@ def main():
     chaser_parser.add_argument("-e", "--decrease", dest="decrease", action="store_true", help="Decrease length of chasers")
     chaser_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     chaser_parser.set_defaults(subparser="chaser")
+
+    pixel_parser = subparsers.add_parser("pixel", help="Direct pixel control")
+    pixel_parser.add_argument("-p", "--pos", dest="position", type=int, help="LED position")
+    pixel_parser.add_argument("-r", "--red", dest="red", type=int, help="Red value (0-255)", default=0)
+    pixel_parser.add_argument("-g", "--green", dest="green", type=int, help="Green value (0-255)", default=0)    
+    pixel_parser.add_argument("-b", "--blue", dest="blue", type=int, help="Blue value (0-255)", default=0)    
+    pixel_parser.add_argument("-l", "--length", dest="length", type=int, help="Number of pixels", default=1)
+    pixel_parser.add_argument("-x", "--random", dest="random", action="store_true", help="Randomise colours")
+    pixel_parser.set_defaults(subparser="pixel")
+
+    all_parser = subparsers.add_parser("all", help="All LED control")
+    all_parser.add_argument("-r", "--red", dest="red", type=int, help="Red value (0-255)", default=0)
+    all_parser.add_argument("-g", "--green", dest="green", type=int, help="Green value (0-255)", default=0)    
+    all_parser.add_argument("-b", "--blue", dest="blue", type=int, help="Blue value (0-255)", default=0)    
+    all_parser.add_argument("-o", "--off", dest="off", action="store_true", help="All LEDS off")
+    all_parser.add_argument("-x", "--random", dest="random", action="store_true", help="Randomise colours")
+    all_parser.set_defaults(subparser="all")
     
     args = parser.parse_args()
 
     init_logging(logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING))
 
     strip = Strip(args.num_leds, args.spi_bus, args.spi_device)
+    persist = False
 
-    if args.subparser == "random_flash":
+    if args.subparser == "flash":
         demo_random_flash(strip, args.rate, args.brightness)
-    elif args.subparser == "rgb_fader":
+    elif args.subparser == "fade":
         demo_rgb_fader(strip, args.rate, args.steps, args.brightness)
     elif args.subparser == "comet":
-        demo_comet(strip, args.speed, args.length, args.cycle, args.reverse, args.brightness)
+        demo_comet(strip, args.speed, args.length, args.colour, args.cycle, args.reverse, args.brightness)
     elif args.subparser == "chaser":
         demo_chaser(strip, args.number, args.speed, args.proximity, args.length, args.decrease, args.reverse, args.brightness)
+    elif args.subparser == "pixel":
+        demo_pixel(strip, args.position, args.length, args.random, args.red, args.green, args.blue, args.brightness)
+        persist = True
+    elif args.subparser == "all":
+        demo_all(strip, args.random, args.off, args.red, args.green, args.blue, args.brightness)
+        persist = True
 
-    strip.set_all_off()
-    strip.update()
+    if not persist:
+        strip.set_all_off()
+        strip.update()
    
 def demo_random_flash(strip, rate, brightness=1):
     """Rate in Hz."""
@@ -134,16 +160,21 @@ def demo_rgb_fader(strip, rate, steps, brightness):
         strip.update()
         time.sleep(delay_time)
 
-def demo_comet(strip, speed, length, cycle, reverse, brightness):
+def demo_comet(strip, speed, length, colour, cycle, reverse, brightness):
 
     if reverse:
         strip.reverse()
     pos = 0
     delay_time = 1. / speed
 
-    r_mod = 0.0
-    g_mod = 30.0 / (length / 20.0)
-    b_mod = 50.0 / (length / 20.0)
+    mod = (0.0, 30.0 / (length / 20.0), 50.0 / (length / 20.0))
+    if colour == "red":
+        r_mod, g_mod, b_mod = mod
+    elif colour == "green":
+        g_mod, b_mod, r_mod = mod
+    elif colour == "blue":
+        b_mod, r_mod, g_mod = mod
+            
     bright_mod = 2.5 / (length / 20.0)
 
     while not _exiting:
@@ -204,6 +235,25 @@ def demo_chaser(strip, number, speed, proximity, length, decrease, reverse, brig
         strip.update()
         time.sleep(delay_time)
 
+def demo_pixel(strip, position, length, randomise, red, green, blue, brightness):
+    for i in range(length):
+        if randomise:
+            red = random.randint(0, MAX_RGB)
+            green = random.randint(0, MAX_RGB)
+            blue = random.randint(0, MAX_RGB)
+        strip.set_led(position + i, red, green, blue, brightness)
+    strip.update()
 
+def demo_all(strip, randomise, off, red, green, blue, brightness):
+    if off:
+        strip.set_all_off()
+    else:
+        if randomise:
+            red = random.randint(0, MAX_RGB)
+            green = random.randint(0, MAX_RGB)
+            blue = random.randint(0, MAX_RGB)
+        strip.set_all(red, green, blue, brightness)
+    strip.update()
+    
 if __name__ == "__main__":
    main()
