@@ -5,6 +5,7 @@ import spidev
 import logging
 logger = logging.getLogger(__name__)
 
+
 def render(spi, states):
     to_send = [0x00, 0x00, 0x00, 0x00]
     for state in states:
@@ -15,6 +16,7 @@ def render(spi, states):
     to_send += [0x00] * num_end_bytes
     logger.debug(to_send)
     spi.xfer(to_send)
+
 
 class Strip(object):
     def __init__(self, num_LEDs, bus, device):
@@ -29,7 +31,6 @@ class Strip(object):
         return len(self._leds)
         
     def set_led(self, pos, red, green, blue, brightness=MAX_BRIGHTNESS):
-        #pos = max(0, pos)  # never go negative
         if pos < 0:
             raise IndexError("Negative position")
         try:

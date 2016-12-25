@@ -5,27 +5,31 @@ import time
 import random
 import operator
 from collections import namedtuple
+import signal
 import logging
+
+from strip import Strip
+from led import MAX_RGB
+
 logger = logging.getLogger(__name__)
+
 
 def init_logging(log_level):
     logging.basicConfig(level=log_level)
 
 # catch signals for tidy exit
-import signal
 _exiting = False
 def signal_handler(signal, frame):
     global _exiting
     _exiting = True
 
-from strip import Strip
-from led import MAX_RGB
 
 DEFAULT_NUM_LEDS = 120
 DEFAULT_SPI_BUS = 0
 DEFAULT_SPI_DEVICE = 0
-DEFAULT_RATE = 5.0 # Hz
+DEFAULT_RATE = 5.0  # Hz
 DEFAULT_BRIGHTNESS = 1
+
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
@@ -51,7 +55,7 @@ def main():
     comet_parser = subparsers.add_parser("comet", help="Comet")
     comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=200)
     comet_parser.add_argument("-l", "--length", dest="length", type=int, help="Length of tail", default=20)
-    comet_parser.add_argument("-x", "--colour", dest="colour", choices=set(("red", "green", "blue")), help="Colour", default="red")
+    comet_parser.add_argument("-x", "--colour", dest="colour", choices={"red", "green", "blue"}, help="Colour", default="red")
     comet_parser.add_argument("-c", "--cycle", dest="cycle", action="store_true", help="Cycle comet colour")
     comet_parser.add_argument("-r", "--reverse", dest="reverse", action="store_true", help="Reverse direction")
     comet_parser.set_defaults(subparser="comet", brightness=31)
@@ -107,7 +111,8 @@ def main():
     if not persist:
         strip.set_all_off()
         strip.update()
-   
+
+
 def demo_random_flash(strip, rate, brightness=1):
     """Rate in Hz."""
     delay_time = 1.0 / rate
@@ -115,7 +120,7 @@ def demo_random_flash(strip, rate, brightness=1):
     start_time = time.time()
     last_report_time = start_time
     while not _exiting:
-        strip.set_all(random.randint(0, 255), random.randint(0, 255), random.randint(0,255), brightness)
+        strip.set_all(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), brightness)
         strip.update()
         time.sleep(delay_time)
         updates += 1
@@ -125,6 +130,7 @@ def demo_random_flash(strip, rate, brightness=1):
             updates_per_second = updates / elapsed
             logger.info("Updates per second: {0}".format(updates_per_second))
             last_report_time = now
+
 
 def demo_rgb_fader(strip, rate, steps, brightness):
     """Fade entire strip through a range of colours."""
@@ -160,6 +166,7 @@ def demo_rgb_fader(strip, rate, steps, brightness):
         strip.update()
         time.sleep(delay_time)
 
+
 def demo_comet(strip, speed, length, colour, cycle, reverse, brightness):
 
     if reverse:
@@ -174,15 +181,17 @@ def demo_comet(strip, speed, length, colour, cycle, reverse, brightness):
         g_mod, b_mod, r_mod = mod
     elif colour == "blue":
         b_mod, r_mod, g_mod = mod
-            
+    else:
+        raise Exception("unknown colour")
+
     bright_mod = 2.5 / (length / 20.0)
 
     while not _exiting:
         for i in range(length):
             try:
-               strip.set_led(pos - i, 255 - i * r_mod, 255 - i * g_mod, 255 - i * b_mod, brightness - i * bright_mod)
+                strip.set_led(pos - i, 255 - i * r_mod, 255 - i * g_mod, 255 - i * b_mod, brightness - i * bright_mod)
             except IndexError:
-               pass
+                pass
         try:
             strip.set_led(pos - length, 0, 0, 0, 0)
         except IndexError:
@@ -235,6 +244,7 @@ def demo_chaser(strip, number, speed, proximity, length, decrease, reverse, brig
         strip.update()
         time.sleep(delay_time)
 
+
 def demo_pixel(strip, position, length, randomise, red, green, blue, brightness):
     for i in range(length):
         if randomise:
@@ -243,6 +253,7 @@ def demo_pixel(strip, position, length, randomise, red, green, blue, brightness)
             blue = random.randint(0, MAX_RGB)
         strip.set_led(position + i, red, green, blue, brightness)
     strip.update()
+
 
 def demo_all(strip, randomise, off, red, green, blue, brightness):
     if off:
@@ -256,4 +267,4 @@ def demo_all(strip, randomise, off, red, green, blue, brightness):
     strip.update()
     
 if __name__ == "__main__":
-   main()
+    main()
