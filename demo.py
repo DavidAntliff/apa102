@@ -38,6 +38,7 @@ def main():
     parser.add_argument("-d", "--debug", dest="debug", action="store_true", help="Show debugging output")
     parser.add_argument("-v", "--verbose", dest="verbose", action="store_true", help="Show verbose output")
     parser.add_argument("-n", "--num-leds", dest="num_leds", type=int, help="Number of LEDs in strip", default=DEFAULT_NUM_LEDS)
+    parser.add_argument("-o", "--offset", dest="offset", type=int, help="First LED to address", default=0)
     parser.add_argument("--spi-bus", dest="spi_bus", type=int, help="SPI bus", default=DEFAULT_SPI_BUS)
     parser.add_argument("--spi-device", dest="spi_device", type=int, help="SPI device", default=DEFAULT_SPI_DEVICE)
     parser.add_argument("-b", "--brightness", dest="brightness", type=int, help="Global brightness (0-31)", default=DEFAULT_BRIGHTNESS)
@@ -91,6 +92,7 @@ def main():
     init_logging(logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING))
 
     strip = Strip(args.num_leds, args.spi_bus, args.spi_device)
+    strip.set_offset(args.offset)
     persist = False
 
     if args.subparser == "flash":

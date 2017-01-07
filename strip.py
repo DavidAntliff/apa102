@@ -21,6 +21,7 @@ def render(spi, states):
 class Strip(object):
     def __init__(self, num_LEDs, bus, device):
         self._num_LEDs = num_LEDs
+        self._offset = 0
         self._reverse = False
         self._leds = all_off(self._num_LEDs)
         self._spi = spidev.SpiDev()
@@ -29,7 +30,10 @@ class Strip(object):
 
     def __len__(self):
         return len(self._leds)
-        
+
+    def set_offset(self, offset):
+        self._offset = offset
+
     def set_led(self, pos, red, green, blue, brightness=MAX_BRIGHTNESS):
         if pos < 0:
             raise IndexError("Negative position")
@@ -56,7 +60,8 @@ class Strip(object):
 
     def update(self):
         leds = list(reversed(self._leds)) if self._reverse else self._leds
-        render(self._spi, leds)
+        pre_offset_leds = all_off(self._offset)
+        render(self._spi, pre_offset_leds + leds)
 
     def reverse(self):
         """Reverse mapping of LEDs on strip."""
