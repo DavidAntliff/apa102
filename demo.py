@@ -46,6 +46,7 @@ def main():
     subparsers = parser.add_subparsers(help="Subcommand help")
     random_flash_parser = subparsers.add_parser("flash", help="Random flash")
     random_flash_parser.add_argument("-r", "--rate", dest="rate", type=float, help="Animation rate (Hz)", default=5)
+    random_flash_parser.add_argument("-d", "--dutycycle", dest="dutycycle", type=float, help="Duty cycle (on time, 1.0 = always on)", default=1.0)
     random_flash_parser.set_defaults(subparser="flash")
 
     rgb_fader_parser = subparsers.add_parser("fade", help="RGB fader")
@@ -96,7 +97,7 @@ def main():
     persist = False
 
     if args.subparser == "flash":
-        demo_random_flash(strip, args.rate, args.brightness)
+        demo_random_flash(strip, args.rate, args.brightness, args.dutycycle)
     elif args.subparser == "fade":
         demo_rgb_fader(strip, args.rate, args.steps, args.brightness)
     elif args.subparser == "comet":
@@ -115,16 +116,26 @@ def main():
         strip.update()
 
 
-def demo_random_flash(strip, rate, brightness=1):
+def demo_random_flash(strip, rate, brightness=1, duty_cycle=1.0):
     """Rate in Hz."""
     delay_time = 1.0 / rate
     updates = 0
     start_time = time.time()
     last_report_time = start_time
+
+    duty_cycle = max(0.01, min(1.0, duty_cycle))
+    on_time = delay_time * duty_cycle
+    off_time = delay_time * (1.0 - duty_cycle)
+    logger.debug("on_time {}, off_time {}".format(on_time, off_time))
+
     while not _exiting:
         strip.set_all(random.randint(0, 255), random.randint(0, 255), random.randint(0, 255), brightness)
         strip.update()
-        time.sleep(delay_time)
+        time.sleep(on_time)
+        if off_time:
+            strip.set_all_off()
+            strip.update()
+            time.sleep(off_time)
         updates += 1
         now = time.time()
         if now - last_report_time > 1.0:
