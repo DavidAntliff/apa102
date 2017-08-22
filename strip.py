@@ -1,9 +1,17 @@
+import math
+import spidev
+import logging
+
 from led import MAX_BRIGHTNESS
 from led_list import all_off
 
-import spidev
-import logging
 logger = logging.getLogger(__name__)
+
+
+# SPI configuration
+SPI_SPEED = 1000000  # 1 MHz
+SPI_CPOL = 0
+SPI_CPHA = 0
 
 
 def render(spi, states):
@@ -11,22 +19,27 @@ def render(spi, states):
     for state in states:
         to_send += state.render()
     num_leds = len(states)
-    num_end_bits = (num_leds + 1) / 2
-    num_end_bytes = (num_end_bits + 7) / 8
+    num_end_bytes = int(math.ceil(num_leds / 8.))
     to_send += [0x00] * num_end_bytes
-    logger.debug(to_send)
+    logger.debug("xfer [" + ", ".join(["{:X}".format(x) for x in to_send]) + "]")
     spi.xfer(to_send)
 
 
 class Strip(object):
-    def __init__(self, num_LEDs, bus, device):
+    def __init__(self, num_LEDs, bus, device, speed=None):
         self._num_LEDs = num_LEDs
         self._offset = 0
         self._reverse = False
         self._leds = all_off(self._num_LEDs)
         self._spi = spidev.SpiDev()
         self._spi.open(bus, device)
-        logger.debug("LED Strip of {0} LEDS on SPI bus {1}, device {2}".format(num_LEDs, bus, device))
+        self._spi.max_speed_hz = SPI_SPEED if speed is None else speed
+        self._spi.mode = SPI_CPOL | SPI_CPHA
+        self._spi.bits_per_word = 8
+        #self._spi.no_cs = True
+        #self._spi.lsbfirst = True
+        logger.debug("LED Strip of {0} LEDS on SPI bus {1}, device {2}, speed {3} Hz, mode 0x{4:x}"
+                     .format(num_LEDs, bus, device, self._spi.max_speed_hz, self._spi.mode))
 
     def __len__(self):
         return len(self._leds)

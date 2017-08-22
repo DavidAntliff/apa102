@@ -4,7 +4,7 @@ import argparse
 import time
 import random
 import operator
-from collections import namedtuple
+from collections import namedtuple, deque
 import signal
 import logging
 
@@ -27,6 +27,7 @@ def signal_handler(signal, frame):
 DEFAULT_NUM_LEDS = 120
 DEFAULT_SPI_BUS = 0
 DEFAULT_SPI_DEVICE = 0
+DEFAULT_SPI_SPEED = 10000000  # 10MHz - above this is diminishing returns
 DEFAULT_RATE = 5.0  # Hz
 DEFAULT_BRIGHTNESS = 1
 
@@ -41,6 +42,7 @@ def main():
     parser.add_argument("-o", "--offset", dest="offset", type=int, help="First LED to address", default=0)
     parser.add_argument("--spi-bus", dest="spi_bus", type=int, help="SPI bus", default=DEFAULT_SPI_BUS)
     parser.add_argument("--spi-device", dest="spi_device", type=int, help="SPI device", default=DEFAULT_SPI_DEVICE)
+    parser.add_argument("--spi-speed", dest="spi_speed", type=int, help="SPI speed in Hz", default=DEFAULT_SPI_SPEED)
     parser.add_argument("-b", "--brightness", dest="brightness", type=int, help="Global brightness (0-31)", default=DEFAULT_BRIGHTNESS)
 
     subparsers = parser.add_subparsers(help="Subcommand help")
@@ -55,7 +57,7 @@ def main():
     rgb_fader_parser.set_defaults(subparser="fade")
 
     comet_parser = subparsers.add_parser("comet", help="Comet")
-    comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=200)
+    comet_parser.add_argument("-s", "--speed", dest="speed", type=float, help="Speed of descent", default=100)
     comet_parser.add_argument("-l", "--length", dest="length", type=int, help="Length of tail", default=20)
     comet_parser.add_argument("-x", "--colour", dest="colour", choices={"red", "green", "blue"}, help="Colour", default="red")
     comet_parser.add_argument("-c", "--cycle", dest="cycle", action="store_true", help="Cycle comet colour")
@@ -72,7 +74,7 @@ def main():
     chaser_parser.set_defaults(subparser="chaser")
 
     pixel_parser = subparsers.add_parser("pixel", help="Direct pixel control")
-    pixel_parser.add_argument("-p", "--pos", dest="position", type=int, help="LED position")
+    pixel_parser.add_argument("-p", "--pos", dest="position", type=int, help="LED position (0-based)", default=0)
     pixel_parser.add_argument("-r", "--red", dest="red", type=int, help="Red value (0-255)", default=0)
     pixel_parser.add_argument("-g", "--green", dest="green", type=int, help="Green value (0-255)", default=0)    
     pixel_parser.add_argument("-b", "--blue", dest="blue", type=int, help="Blue value (0-255)", default=0)    
@@ -92,7 +94,10 @@ def main():
 
     init_logging(logging.DEBUG if args.debug else (logging.INFO if args.verbose else logging.WARNING))
 
-    strip = Strip(args.num_leds, args.spi_bus, args.spi_device)
+    if args.brightness >= 8:
+        logger.warning("Beware excessive current draw! Recommend a lower brightness setting.")
+
+    strip = Strip(args.num_leds, args.spi_bus, args.spi_device, args.spi_speed)
     strip.set_offset(args.offset)
     persist = False
 
@@ -182,6 +187,7 @@ def demo_rgb_fader(strip, rate, steps, brightness):
 
 def demo_comet(strip, speed, length, colour, cycle, reverse, brightness):
 
+    logger.warning("Brightness overridden: %d", brightness)
     if reverse:
         strip.reverse()
     pos = 0
@@ -218,6 +224,46 @@ def demo_comet(strip, speed, length, colour, cycle, reverse, brightness):
             b_mod = x_mod
         time.sleep(delay_time)
 
+
+def demo_chaser2(strip, number, speed, proximity, length, decrease, reverse, brightness):
+    # TODO: INCOMPLETE
+    class Chaser(object):
+        def __init__(self, red, green, blue, length):
+            self._red = red; self._green = green; self._blue = blue
+            self._length = length
+            self._pos = 0
+
+        def go(self):
+            self._pos = 0
+
+        def update(self):
+            self._pos += 1
+
+    def mod_length(x):
+        if decrease:
+            k = length ** (1.0 / (number - 1.0))
+            return int(length / k ** x + 0.5)
+        else:
+            return length
+
+    # create a queue of Chasers
+    chasers = [Chaser(random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), random.randint(0, MAX_RGB), -i * proximity, mod_length(i)) for i in range(number)]
+
+    running_queue = deque()
+    waiting_queue = deque(chasers)
+    count = 0
+
+    while not _exiting:
+        if count % proximity == 0:
+            # start a new chaser
+            if waiting_queue:
+                chaser = waiting_queue.pop()
+                chaser.go()
+                running_queue.append(chaser)
+
+            for chaser in running_queue:
+                chaser.update()
+            count += 1
 
 def demo_chaser(strip, number, speed, proximity, length, decrease, reverse, brightness):
 
